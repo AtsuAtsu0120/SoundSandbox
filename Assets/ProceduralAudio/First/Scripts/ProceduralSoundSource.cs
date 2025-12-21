@@ -6,7 +6,6 @@ namespace ProceduralAudio.First
     public class ProceduralSoundSource : MonoBehaviour
     {
         [SerializeField] private AudioSource _audioSource;
-        [SerializeField] private ImpactAudioGenerator _generator;
         
         private void OnCollisionEnter(Collision other)
         {
