@@ -1,28 +1,22 @@
-using System;
 using ProceduralAudio.ProceduralCore;
-using Unity.Burst;
 using Unity.IntegerTime;
 using UnityEngine;
 using UnityEngine.Audio;
 
-namespace ProceduralAudio.BiquadFilter
+namespace ProceduralAudio.MonoBehaviourAudioGenerator
 {
-    [CreateAssetMenu(fileName = "ProceduralBiquadAudioGenerator", menuName = "Atsuvanced Procedural Audio/Procedural Biquad Audio Generator")]
-    public sealed class ProceduralBiquadAudioGenerator : ScriptableObject, IAudioGenerator
+    public partial class ProceduralAudioSourceController : IAudioGenerator
     {
         public bool isFinite => true;
         public bool isRealtime => true;
         public DiscreteTime? length => new DiscreteTime(3);
-        
-        private Processor _processor;
-        
+
         public GeneratorInstance CreateInstance(ControlContext context, AudioFormat? nestedFormat,
             ProcessorInstance.CreationParameters creationParameters)
         {
-            _processor = new Processor();
-            return context.AllocateGenerator(_processor, new Processor.Control());        
+            return context.AllocateGenerator(new Processor(), new Processor.Control());
         }
-
+        
         // [BurstCompile]
         internal struct Processor : GeneratorInstance.IRealtime
         {
@@ -74,15 +68,6 @@ namespace ProceduralAudio.BiquadFilter
                         }
                         
                         value += _proceduralData.Resonators[i].Process(input);
-
-                        unsafe
-                        {
-                            if (_proceduralData.postprocesser != null)
-                            {
-                                value = _proceduralData.postprocesser(value);
-                            }
-                        }
-
                     }
 
                     for (var i = 0; i < buffer.channelCount; i++)
