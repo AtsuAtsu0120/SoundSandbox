@@ -15,6 +15,9 @@ namespace AtsuSoundProject
             [Tooltip("遮蔽判定対象レイヤー")]
             public LayerMask obstructionLayerMask = ~0;
 
+            [Tooltip("複数レイによる遮蔽判定を使用する")]
+            public bool useMultiRay = true;
+
             [Tooltip("レイの本数(1=中心のみ, 5=中心+上下左右)")]
             [Range(1, 5)]
             public int rayCount = 5;
@@ -62,7 +65,6 @@ namespace AtsuSoundProject
         private float _currentCutoff;
         private float _currentVolumeScale;
 
-        // Ray directions (calculated once per raycast update)
         private static readonly Vector3[] RayOffsets =
         {
             Vector3.zero,   // center
@@ -166,17 +168,26 @@ namespace AtsuSoundProject
             if (distance < 0.01f) return;
 
             var direction = toListener / distance;
-            var rotation = Quaternion.LookRotation(direction);
 
-            var count = Mathf.Clamp(_model.rayCount, 1, RayOffsets.Length);
-            for (var i = 0; i < count; i++)
+            if (_model.useMultiRay)
             {
-                var offset = rotation * (RayOffsets[i] * _model.raySpreadRadius);
-                var rayOrigin = sourcePos + offset;
+                var rotation = Quaternion.LookRotation(direction);
+                var count = Mathf.Clamp(_model.rayCount, 1, RayOffsets.Length);
+                for (var i = 0; i < count; i++)
+                {
+                    var offset = rotation * (RayOffsets[i] * _model.raySpreadRadius);
+                    var rayOrigin = sourcePos + offset;
 
-                var hit = Physics.Raycast(rayOrigin, direction, distance, _model.obstructionLayerMask);
+                    var hit = Physics.Raycast(rayOrigin, direction, distance, _model.obstructionLayerMask);
+                    Gizmos.color = hit ? Color.red : Color.green;
+                    Gizmos.DrawLine(rayOrigin, listenerPos + offset);
+                }
+            }
+            else
+            {
+                var hit = Physics.Raycast(sourcePos, direction, distance, _model.obstructionLayerMask);
                 Gizmos.color = hit ? Color.red : Color.green;
-                Gizmos.DrawLine(rayOrigin, listenerPos + offset);
+                Gizmos.DrawLine(sourcePos, listenerPos);
             }
         }
 
@@ -188,13 +199,49 @@ namespace AtsuSoundProject
             if (distance < 0.01f) return 0f;
 
             var direction = toListener / distance;
-            var rotation = Quaternion.LookRotation(direction);
-
-            var count = Mathf.Clamp(_model.rayCount, 1, RayOffsets.Length);
-            var totalDb = 0f;
-
             var sourceRoot = sourceTransform.root;
             var listenerRoot = listenerTransform.root;
+
+            if (_model.useMultiRay)
+            {
+                return CalculateMultiRayDb(sourcePos, direction, distance, sourceRoot, listenerRoot);
+            }
+            else
+            {
+                return CalculateSingleRayDb(sourcePos, direction, distance, sourceRoot, listenerRoot);
+            }
+        }
+
+        private float CalculateSingleRayDb(
+            Vector3 sourcePos, Vector3 direction, float distance,
+            Transform sourceRoot, Transform listenerRoot)
+        {
+            var hitCount = Physics.RaycastNonAlloc(
+                sourcePos, direction, _hitBuffer, distance, _model.obstructionLayerMask);
+
+            var attenuationDb = 0f;
+            for (var h = 0; h < hitCount; h++)
+            {
+                var hitRoot = _hitBuffer[h].collider.transform.root;
+                if (hitRoot == sourceRoot || hitRoot == listenerRoot)
+                {
+                    continue;
+                }
+
+                var thickness = EstimateThickness(_hitBuffer[h].collider);
+                attenuationDb += thickness * _model.dbPerMeter;
+            }
+
+            return Mathf.Min(attenuationDb, _model.maxAttenuationDb);
+        }
+
+        private float CalculateMultiRayDb(
+            Vector3 sourcePos, Vector3 direction, float distance,
+            Transform sourceRoot, Transform listenerRoot)
+        {
+            var rotation = Quaternion.LookRotation(direction);
+            var count = Mathf.Clamp(_model.rayCount, 1, RayOffsets.Length);
+            var totalDb = 0f;
 
             for (var i = 0; i < count; i++)
             {
@@ -207,7 +254,6 @@ namespace AtsuSoundProject
                 var rayDb = 0f;
                 for (var h = 0; h < hitCount; h++)
                 {
-                    // 音源自身・リスナー自身のコライダーは除外
                     var hitRoot = _hitBuffer[h].collider.transform.root;
                     if (hitRoot == sourceRoot || hitRoot == listenerRoot)
                     {
@@ -222,7 +268,6 @@ namespace AtsuSoundProject
                 totalDb += rayDb;
             }
 
-            // 全レイの平均dB
             var averageDb = totalDb / count;
             return Mathf.Min(averageDb, _model.maxAttenuationDb);
         }

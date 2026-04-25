@@ -61,8 +61,17 @@ namespace AtsuSoundProject.Editor
 
             // Skip "enabled" since it's already drawn as toggle
             DrawObstructionProperty("obstructionLayerMask", "Layer Mask");
-            DrawObstructionProperty("rayCount", "Ray Count");
-            DrawObstructionProperty("raySpreadRadius", "Ray Spread Radius");
+            DrawObstructionProperty("useMultiRay", "Use Multi Ray");
+
+            var useMultiRay = _obstructionModelProp.FindPropertyRelative("useMultiRay");
+            if (useMultiRay != null && useMultiRay.boolValue)
+            {
+                EditorGUI.indentLevel++;
+                DrawObstructionProperty("rayCount", "Ray Count");
+                DrawObstructionProperty("raySpreadRadius", "Ray Spread Radius");
+                EditorGUI.indentLevel--;
+            }
+
             DrawObstructionProperty("updateInterval", "Update Interval");
             DrawObstructionProperty("smoothSpeed", "Smooth Speed");
             DrawObstructionProperty("minCutoffFrequency", "Min Cutoff (Hz)");
